@@ -83,6 +83,7 @@
   }
 
   .avatar-inner {
+    position: relative;
     width: 100%;
     height: 100%;
     border-radius: 50%;
@@ -100,12 +101,20 @@
   }
 
   .avatar-inner img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
     border-radius: 50%;
     display: block;
+    opacity: 0;
+    transition: opacity 0.3s ease;
   }
+
+  .avatar-inner img.is-loaded { opacity: 1; }
+
+  .avatar-inner img[hidden] { display: none; }
 
   @keyframes pulse-ring {
     0%, 100% { box-shadow: 0 0 28px var(--glow), 0 0 60px var(--glow2); }
@@ -277,7 +286,10 @@
 
 <div class="page">
   <div class="avatar-ring" aria-hidden="true">
-    <div class="avatar-inner">R</div>
+    <div class="avatar-inner">
+      <span class="avatar-letter">A</span>
+      <img id="avatar-img" src="avatar.svg" alt="Alamer" decoding="async">
+    </div>
   </div>
 
   <h1 class="name">Alamer</h1>
@@ -312,23 +324,52 @@
     </svg>`
   };
 
+  const DEFAULT_AVATAR = 'avatar.svg';
+  const avatarImg = document.getElementById('avatar-img');
+  const avatarLetter = document.querySelector('.avatar-letter');
+
+  function showAvatarImage() {
+    avatarImg.classList.add('is-loaded');
+    avatarLetter.hidden = true;
+  }
+
+  function showAvatarLetter() {
+    avatarImg.hidden = true;
+    avatarLetter.hidden = false;
+  }
+
+  avatarImg.addEventListener('load', showAvatarImage);
+
+  avatarImg.addEventListener('error', () => {
+    // Externes Bild kaputt? Einmal auf den lokalen Avatar zurückfallen.
+    if (!avatarImg.src.endsWith(DEFAULT_AVATAR)) {
+      avatarImg.src = DEFAULT_AVATAR;
+    } else {
+      showAvatarLetter();
+    }
+  });
+
+  // Bild kann aus dem Cache schon fertig sein, bevor der Listener hängt.
+  if (avatarImg.complete && avatarImg.naturalWidth > 0) showAvatarImage();
+
+  function setAvatar(src) {
+    if (!src || avatarImg.getAttribute('src') === src) return;
+    avatarLetter.hidden = false;
+    avatarImg.hidden = false;
+    avatarImg.classList.remove('is-loaded');
+    avatarImg.src = src;
+  }
+
   async function loadLinks() {
     const list = document.getElementById('link-list');
     try {
-      const res = await fetch('links.json');
+      const res = await fetch('links.json', { cache: 'no-cache' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
 
-      // Avatar: Bild aus links.json laden, sonst "R" anzeigen
-      if (data.avatar) {
-        const inner = document.querySelector('.avatar-inner');
-        const img = document.createElement('img');
-        img.src = data.avatar;
-        img.alt = 'Raiven';
-        img.onerror = () => { img.remove(); inner.textContent = 'A'; };
-        inner.textContent = '';
-        inner.appendChild(img);
-      }
-      data.links.forEach(item => {
+      setAvatar(data.avatar);
+
+      (data.links || []).forEach(item => {
         const a = document.createElement('a');
         a.className = 'link-btn';
         a.href = item.url;
